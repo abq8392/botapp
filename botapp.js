@@ -166,6 +166,11 @@ function addUserCase(join_user, pass_case) {
 
         if(!user.hasOwnProperty('join_case')){
             user['join_case'] = [];
+        } else if (!user){
+            user = {
+                id: join_user,
+                join_case:[]
+            }
         }
         /*
         if (!user) {
