@@ -346,7 +346,7 @@ controller.on('slash_command', function(bot, message) {
         var check_user = function checkUser() {
             controller.storage.users.get(message.user, function(err, user) {
                 if (quali_case) {
-                    if (!user.hasOwnProperty('polling_case')) {
+                    if (!user.hasOwnProperty('join_case')) {
                         sendVote('notAtAll');
                     } else {
                         for (var i = 0; i < user.join_case.length; i++) {
