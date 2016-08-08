@@ -164,13 +164,12 @@ function broadcastPrivate(bot, caseid, users) {
 function addUserCase(join_user, pass_case) {
     controller.storage.users.get(join_user, function(err, user) {
 
-        if(!user){
+        if (!user) {
             user = {
                 id: join_user,
-                join_case:[]
+                join_case: []
             }
-        }
-        else if(!user.hasOwnProperty('join_case')){
+        } else if (!user.hasOwnProperty('join_case')) {
             user['join_case'] = [];
         }
         /*
@@ -205,7 +204,7 @@ function genRandomNum(case_id) {
         do {
             ran_num = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
         } while (polling_case.password.indexOf(ran_num) != -1); // The password has existed.
-        
+
         polling_case.password.push(ran_num);
         controller.storage.teams.save(team);
     });
@@ -303,7 +302,14 @@ controller.on('slash_command', function(bot, message) {
 
     if (message.command == '/propose') {
 
+        // Use conversational way to create your poll case.
+        var input = '';
+        bot.replyPrivate(message, 'Hello! 請先輸入您的提案「標題」');
+        console.log("message in slash_command: " + JSON.stringify(message));
+
+        
         // Hint: /propose "title" "description" "option1" "option2"
+        /*
         var detail = {
             title: user_input[0],
             description: user_input[1],
@@ -314,6 +320,7 @@ controller.on('slash_command', function(bot, message) {
             detail.option.push({ text: user_input[i], count: 0 });
         }
         proposeCase(bot, detail);
+        */
 
     } else if (message.command == '/vote') {
 
