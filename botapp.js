@@ -164,13 +164,14 @@ function broadcastPrivate(bot, caseid, users) {
 function addUserCase(join_user, pass_case) {
     controller.storage.users.get(join_user, function(err, user) {
 
-        if(!user.hasOwnProperty('join_case')){
-            user['join_case'] = [];
-        } else if (!user){
+        if(!user){
             user = {
                 id: join_user,
                 join_case:[]
             }
+        }
+        else if(!user.hasOwnProperty('join_case')){
+            user['join_case'] = [];
         }
         /*
         if (!user) {
