@@ -1,5 +1,6 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
+var Promise = require('promise');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
@@ -296,6 +297,45 @@ controller.on('interactive_message_callback', function(bot, message) {
 
 });
 
+function proposeTitle() {
+    return new Promise(function(resolve, reject) {
+        //var title;
+        controller.on('direct_message', function(bot, message) {
+            console.log('In proposeTitle: ' + JSON.stringify(message));
+            resolve(message);
+        });
+    });
+}
+/*
+function proposeDesc() {
+
+}
+
+function proposePollorOpinion() {
+
+}
+
+function proposeChoice(choice) {
+
+}
+*/
+function proposeDone(detail){
+    return new Promise(function(resolve, reject) {
+        console.log("In propose done: " + JSON.stringify(detail));
+        resolve(detail);
+    });
+    
+}
+
+function hearForPropose() {
+    bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式\n請先輸入你的「提案標題」:');
+    controller.hears('exit!', function(bot, message) {
+        bot.reply(message, '你已經放棄此提案，剛剛所填寫的所有資訊將不被保存');
+    });
+
+
+}
+
 controller.on('slash_command', function(bot, message) {
 
     var user_input = message.text.split(/\ /);
@@ -303,24 +343,33 @@ controller.on('slash_command', function(bot, message) {
     if (message.command == '/propose') {
 
         // Use conversational way to create your poll case.
-        var input = '';
-        bot.replyPrivate(message, 'Hello! 請先輸入您的提案「標題」');
-        console.log("message in slash_command: " + JSON.stringify(message));
+        if (message.channel_id[0] != 'D') {
+            bot.replyPrivate(message, '請在私訊頻道(Direct messages)使用這個功能喔！');
+        } else {
 
-        
-        // Hint: /propose "title" "description" "option1" "option2"
-        /*
-        var detail = {
-            title: user_input[0],
-            description: user_input[1],
-            option: []
-        };
+            var input = '';
+            console.log("message in slash_command: " + JSON.stringify(message));
 
-        for (var i = 2; i < user_input.length; i++) {
-            detail.option.push({ text: user_input[i], count: 0 });
+            proposeTitle().then(function (){
+                return proposeDone(detail);
+            }).then(function(detail){
+                console.log(detail);
+            });
+            // Hint: /propose "title" "description" "option1" "option2"
+            /*
+            var detail = {
+                title: user_input[0],
+                description: user_input[1],
+                option: []
+            };
+
+            for (var i = 2; i < user_input.length; i++) {
+                detail.option.push({ text: user_input[i], count: 0 });
+            }
+            proposeCase(bot, detail);
+            */
         }
-        proposeCase(bot, detail);
-        */
+
 
     } else if (message.command == '/vote') {
 
