@@ -164,12 +164,16 @@ function broadcastPrivate(bot, caseid, users) {
 function addUserCase(join_user, pass_case) {
     controller.storage.users.get(join_user, function(err, user) {
 
+        if(!user.hasOwnProperty('join_case')){
+            team['join_case'] = [];
+        }
+        /*
         if (!user) {
             user = {
                 id: join_user,
                 join_case: []
             }
-        }
+        }*/
 
         user.join_case.push({
             case_id: pass_case,
@@ -336,7 +340,7 @@ controller.on('slash_command', function(bot, message) {
         var check_user = function checkUser() {
             controller.storage.users.get(message.user, function(err, user) {
                 if (quali_case) {
-                    if (!user) {
+                    if (!user.hasOwnProperty('polling_case')) {
                         sendVote('notAtAll');
                     } else {
                         for (var i = 0; i < user.join_case.length; i++) {
