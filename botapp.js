@@ -165,7 +165,7 @@ function addUserCase(join_user, pass_case) {
     controller.storage.users.get(join_user, function(err, user) {
 
         if(!user.hasOwnProperty('join_case')){
-            team['join_case'] = [];
+            user['join_case'] = [];
         }
         /*
         if (!user) {
