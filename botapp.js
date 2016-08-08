@@ -1,7 +1,7 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
 
-var mongoUri = process.env.MONGOLAB_URI || 'mongodb://localhost:27017/botapp';
+var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
 var port = process.env.PORT || "1337";
 
