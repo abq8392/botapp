@@ -319,6 +319,7 @@ function proposeChoice(choice) {
 
 }
 */
+/*
 function proposeDone(detail){
     return new Promise(function(resolve, reject) {
         console.log("In propose done: " + JSON.stringify(detail));
@@ -334,7 +335,7 @@ function hearForPropose() {
     });
 
 
-}
+}*/
 
 controller.on('slash_command', function(bot, message) {
 
@@ -346,7 +347,7 @@ controller.on('slash_command', function(bot, message) {
         if (message.channel_id[0] != 'D') {
             bot.replyPrivate(message, '請在私訊頻道(Direct messages)使用這個功能喔！');
         } else {
-
+            /*
             var input = '';
             console.log("message in slash_command: " + JSON.stringify(message));
 
@@ -354,9 +355,10 @@ controller.on('slash_command', function(bot, message) {
                 return proposeDone(detail);
             }).then(function(detail){
                 console.log(detail);
-            });
+            });*/
+
             // Hint: /propose "title" "description" "option1" "option2"
-            /*
+
             var detail = {
                 title: user_input[0],
                 description: user_input[1],
@@ -367,7 +369,7 @@ controller.on('slash_command', function(bot, message) {
                 detail.option.push({ text: user_input[i], count: 0 });
             }
             proposeCase(bot, detail);
-            */
+
         }
 
 
