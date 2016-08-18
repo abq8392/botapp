@@ -1,10 +1,13 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
-var Promise = require('promise');
+var async = require('asyncawait/async');
+var await = require('asyncawait/await');
+//var async = require('async');
+//var Promise = require('promise');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
-var port = process.env.PORT || "1337";
+var port = process.env.port || "3000";
 
 if (!process.env.clientId || !process.env.clientSecret || !port) {
     console.log('Error: Specify clientId clientSecret and port in environment');
@@ -58,7 +61,7 @@ function proposeCase(bot, case_detail) {
             case_id: (team.polling_case.length) + 1,
             people_count: 0,
             joined_users: [],
-            password: [],
+            tickets: [],
             people_goal: 2,
             over_goal: false,
             details: case_detail
@@ -153,45 +156,18 @@ function createOption(case_id, message_user, callback) {
     });
 }
 
+// Broadcast when poll starting!
 function broadcastPrivate(bot, caseid, users) {
     for (var i = 0; i < users.length; i++) {
         bot.startPrivateConversation({ user: users[i] }, function(err, convo) {
-            convo.say('#' + caseid + '投票案已經開始。如果你想要開始投票，使用 `/vote ' + caseid + '`指令開始進行');
+            convo.say('#' + caseid + '投票案已經開始。如果你想要開始投票，使用 `/vote ' + caseid + ' ticket_number`指令開始進行');
         });
     }
 }
 
-// Add case to user database
-function addUserCase(join_user, pass_case) {
-    controller.storage.users.get(join_user, function(err, user) {
-
-        if (!user) {
-            user = {
-                id: join_user,
-                join_case: []
-            }
-        } else if (!user.hasOwnProperty('join_case')) {
-            user['join_case'] = [];
-        }
-        /*
-        if (!user) {
-            user = {
-                id: join_user,
-                join_case: []
-            }
-        }*/
-
-        user.join_case.push({
-            case_id: pass_case,
-            done: false,
-        });
-        controller.storage.users.save(user);
-        //callback && callback();
-    });
-}
-
-function genRandomNum(case_id) {
-    var ran_num = 0;
+// Update people count, joined_user list and generate unique ticket number
+function addTeamCase(bot, user_id, case_id, callback) {
+    var unique_ticket = 0;
     controller.storage.teams.get('T1PG5SWSC', function(err, team) {
         var polling_case;
         for (var i = 0; i < team.polling_case.length; i++) {
@@ -201,21 +177,72 @@ function genRandomNum(case_id) {
             }
         }
 
-        // Generate random number from 1000- 9999
-        do {
-            ran_num = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
-        } while (polling_case.password.indexOf(ran_num) != -1); // The password has existed.
+        // Update for people count & joined user list
+        polling_case.people_count++;
+        polling_case.joined_users.push(user_id);
 
-        polling_case.password.push(ran_num);
+        if (polling_case.people_count == 2) {
+
+            // Acheive the goal of people number
+            polling_case.over_goal = true;
+            broadcastPrivate(bot, polling_case.case_id, polling_case.joined_users);
+
+        } else if (polling_case.people_count > 2) {
+
+            // Already over goal
+            broadcastPrivate(bot, polling_case.case_id, [user_id]);
+
+        } else {
+            bot.startPrivateConversation({ user: user_id }, function(err, convo) {
+                convo.say('到達人數門檻時，將會再度通知您！');
+            });
+        }
+
+
+        // Generate random number from 1000 to 9999
+        do {
+            unique_ticket = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+        } while (polling_case.tickets.indexOf(unique_ticket) != -1); // The ticket has existed.
+
+        polling_case.tickets.push(unique_ticket);
         controller.storage.teams.save(team);
+
+        callback(unique_ticket);
     });
 }
 
-function updateUserCase(join_user, pass_case) {
+// Add case to user database
+function addUserCase(join_user, pass_case, unique_ticket, callback) {
+
+    controller.storage.users.get(join_user, function(err, user) {
+        if (!user) {
+            user = {
+                id: join_user,
+                join_case: []
+            }
+        } else if (!user.hasOwnProperty('join_case')) {
+            user['join_case'] = [];
+        }
+
+        user.join_case.push({
+            case_id: pass_case,
+            done: false,
+            ticket_num: unique_ticket,
+            option: ""
+        });
+        controller.storage.users.save(user);
+        callback();
+    });
+}
+
+// Record whether user vote or not, and his/her choice
+function updateUserCase(join_user, pass_case, choice) {
     controller.storage.users.get(join_user, function(err, user) {
         for (var i = 0; i < user.join_case.length; i++) {
-            if (pass_case == user.join_case[i].case_id)
+            if (pass_case == user.join_case[i].case_id) {
                 user.join_case[i].done = true;
+                user.join_case[i].option = choice;
+            }
         }
         controller.storage.users.save(user);
     });
@@ -240,7 +267,7 @@ controller.on('interactive_message_callback', function(bot, message) {
             for (var i = 0; i < polling_case.length; i++) {
                 if (case_id == polling_case[i].case_id) {
                     polling_case[i].details.option[option_order - 1].count++;
-                    updateUserCase(user_id, case_id);
+                    updateUserCase(user_id, case_id, choice);
                 }
             }
             controller.storage.teams.save(team);
@@ -260,29 +287,13 @@ controller.on('interactive_message_callback', function(bot, message) {
 
                 for (var i = 0; i < polling_case.length; i++) {
                     if (case_id == polling_case[i].case_id) {
-                        polling_case[i].people_count++;
-                        polling_case[i].joined_users.push(user_id);
-                        addUserCase(user_id, case_id);
-                        //genRandomNum(case_id);
 
-                        if (polling_case[i].people_count == 2) {
+                        addTeamCase(bot, user_id, case_id, function(unique_ticket) {
+                            addUserCase(user_id, case_id, unique_ticket, function() {
+                                bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票，票卷號碼為：' + unique_ticket);
+                            });
+                        });
 
-                            // Acheive the goal of people number
-                            console.log('Broadcast to users!');
-                            polling_case[i].over_goal = true;
-                            bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票');
-                            broadcastPrivate(bot, polling_case[i].case_id, polling_case[i].joined_users);
-
-                        } else if (polling_case[i].people_count > 2) {
-
-                            // Already qualified case
-                            console.log('Send the tutorial');
-                            bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票');
-                            broadcastPrivate(bot, polling_case[i].case_id, [user_id]);
-
-                        } else {
-                            bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票。到達人數門檻時，將會再度通知您！');
-                        }
                     }
                 }
 
@@ -297,28 +308,8 @@ controller.on('interactive_message_callback', function(bot, message) {
 
 });
 
-function proposeTitle() {
-    return new Promise(function(resolve, reject) {
-        //var title;
-        controller.on('direct_message', function(bot, message) {
-            console.log('In proposeTitle: ' + JSON.stringify(message));
-            resolve(message);
-        });
-    });
-}
-/*
-function proposeDesc() {
 
-}
 
-function proposePollorOpinion() {
-
-}
-
-function proposeChoice(choice) {
-
-}
-*/
 /*
 function proposeDone(detail){
     return new Promise(function(resolve, reject) {
@@ -336,6 +327,141 @@ function hearForPropose() {
 
 
 }*/
+
+/*
+function proposeTitle(callback) {
+    controller.on('direct_message', function(bot, message) {
+        console.log('Title: ' + JSON.stringify(message));
+        //callback(null, message.text);
+        callback(null);
+    });
+}*/
+/*
+function proposeDesc() {
+
+}
+
+function proposeChoice() {
+
+}
+
+function convoProposeTest(bot, user_id) {
+    async.series([
+            function(callback) {
+                controller.on('direct_message', function(bot, message) {
+                    console.log('Title: ' + JSON.stringify(message));
+                    bot.reply(message,'請輸入「提案描述」');
+                    callback(null, message.text);
+                });
+                //callback(null, 'one');
+            },
+            function(callback) {
+                controller.on('direct_message', function(bot, message) {
+                    console.log('Title: ' + JSON.stringify(message));
+                    bot.reply(message,'請輸入「選項」，每個選項請用空格隔開');
+                    callback(null, message.text);
+                });
+                //callback(null, 'two');
+            },
+            function(callback) {
+                callback(null, 'three');
+            }
+        ],
+        function(err, results) {
+            if (err) {
+                console.log('Error occured in convoProposeTest\n' + err);
+            } else {
+                console.log(results);
+            }
+        }
+    );
+
+}
+*/
+/*
+function convoPropose(bot, user_id) {
+    async.series([
+            function(callback) {
+                // Hint: Polling case title
+                console.log('I am in polling case title (Hint)');
+                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
+                    if (err) {
+                        console.log(err);
+                        callback(err);
+                    } else {
+                        convo.say('請輸入「提案標題」:');
+                        callback(null);
+                    }
+                });
+            },
+            function(callback) {
+                // Hear: polling case title
+                console.log('I am in polling case title (Input)');
+                controller.on('direct_message', function(bot, message) {
+                    console.log('Title: ' + JSON.stringify(message));
+                    //callback(null, message.text);
+                    callback(null);
+                });
+            },
+            function(callback) {
+                // Hint: Polling case description
+                console.log('I am in polling case description (Hint)');
+                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
+                    if (err) {
+                        console.log(err);
+                        callback(err);
+                    } else {
+                        convo.say('請輸入「提案描述」:');
+                        //callback(null);
+                    }
+                });
+            },
+            function(callback) {
+                // Hear: Polling case description
+                console.log('I am in polling case description (Input)');
+                controller.on('direct_message', function(bot, message) {
+                    console.log('Description: ' + JSON.stringify(message));
+                    //callback(null, message.text);
+                    //callback(null);
+                });
+            },
+            function(callback) {
+                // Hint: Polling case choice setting
+                console.log('I am in polling case choice setting (Hint)');
+                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
+                    if (err) {
+                        console.log(err);
+                        callback(err);
+                    } else {
+                        convo.say('請輸入「投票選項」，選項間請用空格隔開:');
+                        //callback(null);
+                    }
+                });
+            },
+            function(callback) {
+                // Hear: Polling case choice setting
+                console.log('I am in polling case choice setting (Input)');
+                controller.on('direct_message', function(bot, message) {
+                    console.log('In proposeTitle: ' + JSON.stringify(message));
+                    //callback(null, message.text);
+                    //callback(null);
+                });
+            }
+        ],
+        //optional callback
+        function(err, results) {
+            if (err) {
+                console.log('Async callback error:' + err);
+            } else {
+                console.log('Async result is:' + results);
+            }
+
+        });
+}
+*/
+
+
+
 
 controller.on('slash_command', function(bot, message) {
 
@@ -357,8 +483,13 @@ controller.on('slash_command', function(bot, message) {
                 console.log(detail);
             });*/
 
-            // Hint: /propose "title" "description" "option1" "option2"
+            //bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式\n請輸入「提案標題」:');
+            //convoPropose(bot, message.user);
 
+            //convoProposeTest();
+
+            // Hint: /propose "title" "description" "option1" "option2"
+            
             var detail = {
                 title: user_input[0],
                 description: user_input[1],
@@ -376,6 +507,7 @@ controller.on('slash_command', function(bot, message) {
     } else if (message.command == '/vote') {
 
         var case_id = user_input[0];
+        var input_ticket = user_input[1];
         var quali_case = true;
         //var ticket = user_input[1];
 
@@ -407,17 +539,24 @@ controller.on('slash_command', function(bot, message) {
                     if (!user.hasOwnProperty('join_case')) {
                         sendVote('notAtAll');
                     } else {
+
                         for (var i = 0; i < user.join_case.length; i++) {
                             if (case_id == user.join_case[i].case_id) {
-                                if (!user.join_case[i].done)
+                                if (input_ticket != user.join_case[i].ticket_num) {
+                                    sendVote('pwdWrong');
+                                    break;
+                                }
+                                if (!user.join_case[i].done) {
                                     sendVote();
-                                else
+                                } else {
                                     sendVote('hasDone');
+                                }
                                 break;
                             } else if (i == user.join_case.length - 1) {
                                 sendVote('notJoin');
                             }
                         }
+
                     }
                 }
             });
@@ -427,7 +566,7 @@ controller.on('slash_command', function(bot, message) {
         function sendVote(condition) {
             switch (condition) {
                 case 'pwdWrong':
-                    bot.replyPrivate(message, 'Sorry! 認證碼錯誤，請重新輸入');
+                    bot.replyPrivate(message, 'Sorry! 票卷號碼錯誤，請重新輸入');
                     break;
                 case 'notAtAll':
                     bot.replyPrivate(message, 'Sorry! 你沒有參與任何投票案');
