@@ -1,9 +1,5 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
-var async = require('asyncawait/async');
-var await = require('asyncawait/await');
-//var async = require('async');
-//var Promise = require('promise');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
@@ -309,160 +305,6 @@ controller.on('interactive_message_callback', function(bot, message) {
 });
 
 
-
-/*
-function proposeDone(detail){
-    return new Promise(function(resolve, reject) {
-        console.log("In propose done: " + JSON.stringify(detail));
-        resolve(detail);
-    });
-    
-}
-
-function hearForPropose() {
-    bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式\n請先輸入你的「提案標題」:');
-    controller.hears('exit!', function(bot, message) {
-        bot.reply(message, '你已經放棄此提案，剛剛所填寫的所有資訊將不被保存');
-    });
-
-
-}*/
-
-/*
-function proposeTitle(callback) {
-    controller.on('direct_message', function(bot, message) {
-        console.log('Title: ' + JSON.stringify(message));
-        //callback(null, message.text);
-        callback(null);
-    });
-}*/
-/*
-function proposeDesc() {
-
-}
-
-function proposeChoice() {
-
-}
-
-function convoProposeTest(bot, user_id) {
-    async.series([
-            function(callback) {
-                controller.on('direct_message', function(bot, message) {
-                    console.log('Title: ' + JSON.stringify(message));
-                    bot.reply(message,'請輸入「提案描述」');
-                    callback(null, message.text);
-                });
-                //callback(null, 'one');
-            },
-            function(callback) {
-                controller.on('direct_message', function(bot, message) {
-                    console.log('Title: ' + JSON.stringify(message));
-                    bot.reply(message,'請輸入「選項」，每個選項請用空格隔開');
-                    callback(null, message.text);
-                });
-                //callback(null, 'two');
-            },
-            function(callback) {
-                callback(null, 'three');
-            }
-        ],
-        function(err, results) {
-            if (err) {
-                console.log('Error occured in convoProposeTest\n' + err);
-            } else {
-                console.log(results);
-            }
-        }
-    );
-
-}
-*/
-/*
-function convoPropose(bot, user_id) {
-    async.series([
-            function(callback) {
-                // Hint: Polling case title
-                console.log('I am in polling case title (Hint)');
-                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
-                    if (err) {
-                        console.log(err);
-                        callback(err);
-                    } else {
-                        convo.say('請輸入「提案標題」:');
-                        callback(null);
-                    }
-                });
-            },
-            function(callback) {
-                // Hear: polling case title
-                console.log('I am in polling case title (Input)');
-                controller.on('direct_message', function(bot, message) {
-                    console.log('Title: ' + JSON.stringify(message));
-                    //callback(null, message.text);
-                    callback(null);
-                });
-            },
-            function(callback) {
-                // Hint: Polling case description
-                console.log('I am in polling case description (Hint)');
-                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
-                    if (err) {
-                        console.log(err);
-                        callback(err);
-                    } else {
-                        convo.say('請輸入「提案描述」:');
-                        //callback(null);
-                    }
-                });
-            },
-            function(callback) {
-                // Hear: Polling case description
-                console.log('I am in polling case description (Input)');
-                controller.on('direct_message', function(bot, message) {
-                    console.log('Description: ' + JSON.stringify(message));
-                    //callback(null, message.text);
-                    //callback(null);
-                });
-            },
-            function(callback) {
-                // Hint: Polling case choice setting
-                console.log('I am in polling case choice setting (Hint)');
-                bot.startPrivateConversation({ user: user_id }, function(err, convo) {
-                    if (err) {
-                        console.log(err);
-                        callback(err);
-                    } else {
-                        convo.say('請輸入「投票選項」，選項間請用空格隔開:');
-                        //callback(null);
-                    }
-                });
-            },
-            function(callback) {
-                // Hear: Polling case choice setting
-                console.log('I am in polling case choice setting (Input)');
-                controller.on('direct_message', function(bot, message) {
-                    console.log('In proposeTitle: ' + JSON.stringify(message));
-                    //callback(null, message.text);
-                    //callback(null);
-                });
-            }
-        ],
-        //optional callback
-        function(err, results) {
-            if (err) {
-                console.log('Async callback error:' + err);
-            } else {
-                console.log('Async result is:' + results);
-            }
-
-        });
-}
-*/
-
-
-
-
 controller.on('slash_command', function(bot, message) {
 
     var user_input = message.text.split(/\ /);
@@ -473,34 +315,50 @@ controller.on('slash_command', function(bot, message) {
         if (message.channel_id[0] != 'D') {
             bot.replyPrivate(message, '請在私訊頻道(Direct messages)使用這個功能喔！');
         } else {
-            /*
-            var input = '';
-            console.log("message in slash_command: " + JSON.stringify(message));
 
-            proposeTitle().then(function (){
-                return proposeDone(detail);
-            }).then(function(detail){
-                console.log(detail);
-            });*/
-
-            //bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式\n請輸入「提案標題」:');
-            //convoPropose(bot, message.user);
-
-            //convoProposeTest();
-
-            // Hint: /propose "title" "description" "option1" "option2"
+            bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式');
             
             var detail = {
-                title: user_input[0],
-                description: user_input[1],
+                title: "",
+                description: "",
                 option: []
             };
 
-            for (var i = 2; i < user_input.length; i++) {
-                detail.option.push({ text: user_input[i], count: 0 });
+            askTitle = function(response, convo) {
+                convo.ask('請輸入提案標題:', function(response, convo) {
+                    convo.say('OK, your title is 「' + response.text + '」');
+                    askDesc(response, convo);
+                    convo.next();
+                });
             }
-            proposeCase(bot, detail);
+            askDesc = function(response, convo) {
+                convo.ask('請輸入提案描述:', function(response, convo) {
+                    convo.say('Got your description: ' + response.text);
+                    askChoice(response, convo);
+                    convo.next();
+                });
+            }
+            askChoice = function(response, convo) {
+                convo.ask('請輸入投票選項，每個選項請用空格隔開：', function(response, convo) {
+                    convo.say('Great!');
+                    convo.next();
+                });
+                
+                convo.on('end', function(convo) {
+                    if (convo.status == 'completed') {
+                        var res = convo.extractResponses();
+                        detail.title = res['請輸入提案標題:'];
+                        detail.description = res['請輸入提案描述:'];
+                        var choice = res['請輸入投票選項，每個選項請用空格隔開：'].split(/\ /);
+                        for (var i = 0 ; i < choice.length; i++){
+                            detail.option.push({ text: choice[i], count: 0 });
+                        }
+                        proposeCase(bot, detail);
+                    }
+                });
+            }
 
+            bot.startConversation(message, askTitle);
         }
 
 
