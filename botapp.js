@@ -58,8 +58,6 @@ function proposeCase(bot, case_detail) {
             people_count: 0,
             joined_users: [],
             tickets: [],
-            people_goal: 2,
-            over_goal: false,
             details: case_detail
         })
 
@@ -123,6 +121,7 @@ function proposeCase(bot, case_detail) {
     });
 }
 
+// For type: 'poll'
 function createOption(case_id, message_user, callback) {
     var case_data;
     case_data = controller.storage.teams.get('T1PG5SWSC', function(err, team) {
@@ -152,18 +151,72 @@ function createOption(case_id, message_user, callback) {
     });
 }
 
+// For type 'input_number'
+function askNumber(bot, message, case_id, message_user, callback) {
+
+
+
+    controller.storage.teams.get('T1PG5SWSC', function(err, team) {
+        var polling_case;
+        for (var i = 0; i < team.polling_case.length; i++) {
+            if (case_id == team.polling_case[i].case_id) {
+                polling_case = team.polling_case[i];
+                break;
+            }
+        }
+
+        var data = {
+            text: '(只有你會看到此項訊息)',
+            attachments: [{
+                fallback: polling_case.details.title,
+                title: polling_case.details.title,
+                text: polling_case.details.description,
+                color: '#3AA3E3',
+                attachment_type: 'default',
+            }]
+        };
+
+        askUser = function(response, convo) {
+            convo.say(data);
+            convo.ask('請您輸入數字：', function(response, convo) {
+                convo.say('已收到您的回應，謝謝您的參與!');
+                convo.next();
+            });
+
+            convo.on('end', function(convo) {
+                var unique_ticket;
+
+                if (convo.status == 'completed') {
+                    var res = convo.extractResponses();
+                    var choice = Number(res['請您輸入數字：']);
+                    polling_case.details.option.push(choice);
+
+                    do {
+                        unique_ticket = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+                    } while (polling_case.tickets.indexOf(unique_ticket) != -1); // The ticket has existed.
+
+                    polling_case.tickets.push(unique_ticket);
+
+                    controller.storage.teams.save(team);
+                    callback(choice, unique_ticket);
+                }
+            });
+        }
+        bot.startConversation(message, askUser);
+    });
+}
+
 // Broadcast when poll starting!
 function broadcastPrivate(bot, caseid, users) {
     for (var i = 0; i < users.length; i++) {
         bot.startPrivateConversation({ user: users[i] }, function(err, convo) {
-            convo.say('#' + caseid + '投票案已經開始。如果你想要開始投票，使用 `/vote ' + caseid + ' ticket_number`指令開始進行');
+            convo.say('#' + caseid + '投票案已經開始。如果你想要開始投票，使用 `/vote ' + caseid + '`指令開始進行');
         });
     }
 }
 
 // Update people count, joined_user list and generate unique ticket number
-function addTeamCase(bot, user_id, case_id, callback) {
-    var unique_ticket = 0;
+function addTeamCase(bot, user_id, case_id) {
     controller.storage.teams.get('T1PG5SWSC', function(err, team) {
         var polling_case;
         for (var i = 0; i < team.polling_case.length; i++) {
@@ -177,13 +230,14 @@ function addTeamCase(bot, user_id, case_id, callback) {
         polling_case.people_count++;
         polling_case.joined_users.push(user_id);
 
-        if (polling_case.people_count == 2) {
+
+        if (polling_case.people_count == polling_case.details.people_goal) {
 
             // Acheive the goal of people number
-            polling_case.over_goal = true;
+            polling_case.details.over_goal = true;
             broadcastPrivate(bot, polling_case.case_id, polling_case.joined_users);
 
-        } else if (polling_case.people_count > 2) {
+        } else if (polling_case.people_count > polling_case.details.people_goal) {
 
             // Already over goal
             broadcastPrivate(bot, polling_case.case_id, [user_id]);
@@ -193,23 +247,12 @@ function addTeamCase(bot, user_id, case_id, callback) {
                 convo.say('到達人數門檻時，將會再度通知您！');
             });
         }
-
-
-        // Generate random number from 1000 to 9999
-        do {
-            unique_ticket = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
-        } while (polling_case.tickets.indexOf(unique_ticket) != -1); // The ticket has existed.
-
-        polling_case.tickets.push(unique_ticket);
         controller.storage.teams.save(team);
-
-        callback(unique_ticket);
     });
 }
 
 // Add case to user database
-function addUserCase(join_user, pass_case, unique_ticket, callback) {
-
+function addUserCase(join_user, pass_case) {
     controller.storage.users.get(join_user, function(err, user) {
         if (!user) {
             user = {
@@ -223,21 +266,22 @@ function addUserCase(join_user, pass_case, unique_ticket, callback) {
         user.join_case.push({
             case_id: pass_case,
             done: false,
-            ticket_num: unique_ticket,
+            ticket_num: 0,
             option: ""
         });
         controller.storage.users.save(user);
-        callback();
     });
 }
 
 // Record whether user vote or not, and his/her choice
-function updateUserCase(join_user, pass_case, choice) {
+// Add unique ticket number
+function updateUserCase(join_user, pass_case, choice, unique_ticket) {
     controller.storage.users.get(join_user, function(err, user) {
         for (var i = 0; i < user.join_case.length; i++) {
             if (pass_case == user.join_case[i].case_id) {
                 user.join_case[i].done = true;
                 user.join_case[i].option = choice;
+                user.join_case[i].ticket_num = unique_ticket;
             }
         }
         controller.storage.users.save(user);
@@ -254,16 +298,29 @@ controller.on('interactive_message_callback', function(bot, message) {
         var case_id = ids[1];
         var user_id = ids[2];
 
-        bot.replyInteractive(message, ':white_check_mark: Thank you! You have chosen ' + choice);
-
         controller.storage.teams.get('T1PG5SWSC', function(err, team) {
             var option_order = message.actions[0].value;
             var polling_case = team.polling_case;
+            var case_type;
+            var unique_ticket = 0;
 
             for (var i = 0; i < polling_case.length; i++) {
                 if (case_id == polling_case[i].case_id) {
-                    polling_case[i].details.option[option_order - 1].count++;
-                    updateUserCase(user_id, case_id, choice);
+
+                    if (polling_case[i].details.type == 'poll') {
+                        polling_case[i].details.option[option_order - 1].count++;
+                    }
+
+                    // Generate unique random number from 1000 to 9999
+                    do {
+                        unique_ticket = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+                    } while (polling_case[i].tickets.indexOf(unique_ticket) != -1); // The ticket has existed.
+
+                    polling_case[i].tickets.push(unique_ticket);
+                    updateUserCase(user_id, case_id, choice, unique_ticket);
+                    bot.replyInteractive(message, ':white_check_mark: Thank you! You have chosen ' + choice +
+                        '\n票卷號碼為：' + unique_ticket);
+                    break;
                 }
             }
             controller.storage.teams.save(team);
@@ -284,11 +341,9 @@ controller.on('interactive_message_callback', function(bot, message) {
                 for (var i = 0; i < polling_case.length; i++) {
                     if (case_id == polling_case[i].case_id) {
 
-                        addTeamCase(bot, user_id, case_id, function(unique_ticket) {
-                            addUserCase(user_id, case_id, unique_ticket, function() {
-                                bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票，票卷號碼為：' + unique_ticket);
-                            });
-                        });
+                        addTeamCase(bot, user_id, case_id);
+                        addUserCase(user_id, case_id);
+                        bot.replyInteractive(message, ':white_check_mark: 你已報名參與此投票');
 
                     }
                 }
@@ -317,10 +372,13 @@ controller.on('slash_command', function(bot, message) {
         } else {
 
             bot.replyPrivate(message, 'Hello! 歡迎使用提案功能，你可以隨時輸入 `exit!` 來離開提案模式');
-            
+
             var detail = {
                 title: "",
                 description: "",
+                type: "",
+                people_goal: 0,
+                over_goal: false,
                 option: []
             };
 
@@ -334,29 +392,69 @@ controller.on('slash_command', function(bot, message) {
             askDesc = function(response, convo) {
                 convo.ask('請輸入提案描述:', function(response, convo) {
                     convo.say('Got your description: ' + response.text);
-                    askChoice(response, convo);
+                    askPeopleGoal(response, convo);
                     convo.next();
                 });
             }
-            askChoice = function(response, convo) {
-                convo.ask('請輸入投票選項，每個選項請用空格隔開：', function(response, convo) {
-                    convo.say('Great!');
+            askPeopleGoal = function(response, convo) {
+                convo.ask('請設定人數門檻(請輸入數字，若不設立請輸入0): ', function(response, convo) {
+                    var res = convo.extractResponses();
+                    convo.say('OK! 人數門檻為: ' + response.text);
+
+                    if (res['請設定人數門檻(請輸入數字，若不設立請輸入0): '] != '0') {
+                        detail.people_goal = Number(res['請設定人數門檻(請輸入數字，若不設立請輸入0): ']);
+                    } else {
+                        detail.people_goal = 0;
+                        detail.over_goal = true;
+                    }
+
+                    askType(response, convo);
                     convo.next();
                 });
-                
+            }
+            askType = function(response, convo) {
+                convo.ask('A. 輸入固定選項，B. 成員自由輸入數字', function(response, convo) {
+                    var res = convo.extractResponses();
+                    convo.say('OK! 你選擇了' + response.text);
+
+                    if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == 'A') {
+                        detail.type = 'poll';
+                    } else if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == 'B') {
+                        detail.type = 'input_number';
+                    }
+                    askOpinion(response, convo);
+                    convo.next();
+                });
+            }
+            askOpinion = function(response, convo) {
+                var res = convo.extractResponses(response);
+                if (detail.type == 'poll') {
+                    convo.ask('請輸入投票選項，每個選項請用空格隔開：', function(response, convo) {
+                        convo.say('Great!');
+                        //askForSure(response, convo);
+                        convo.next();
+                    });
+                }
+
                 convo.on('end', function(convo) {
                     if (convo.status == 'completed') {
                         var res = convo.extractResponses();
+                        var choice = '';
+
                         detail.title = res['請輸入提案標題:'];
                         detail.description = res['請輸入提案描述:'];
-                        var choice = res['請輸入投票選項，每個選項請用空格隔開：'].split(/\ /);
-                        for (var i = 0 ; i < choice.length; i++){
-                            detail.option.push({ text: choice[i], count: 0 });
+
+                        if (detail.type == 'poll') {
+                            choice = res['請輸入投票選項，每個選項請用空格隔開：'].split(/\ /);
+                            for (var i = 0; i < choice.length; i++) {
+                                detail.option.push({ text: choice[i], count: 0 });
+                            }
                         }
                         proposeCase(bot, detail);
                     }
                 });
             }
+
 
             bot.startConversation(message, askTitle);
         }
@@ -365,9 +463,9 @@ controller.on('slash_command', function(bot, message) {
     } else if (message.command == '/vote') {
 
         var case_id = user_input[0];
-        var input_ticket = user_input[1];
         var quali_case = true;
-        //var ticket = user_input[1];
+        var case_type = '';
+
 
         // Handle the exception of poll case
         var check_case = function checkCase(callback) {
@@ -379,11 +477,15 @@ controller.on('slash_command', function(bot, message) {
                         quali_case = false;
                         break;
                     } else if (case_id == team.polling_case[i].case_id) {
-                        if (!team.polling_case[i].over_goal) {
+
+                        case_type = team.polling_case[i].details.type;
+
+                        if (!team.polling_case[i].details.over_goal) {
                             sendVote('notOpen');
                             quali_case = false;
                             break;
                         }
+
                     }
                 }
                 callback && callback();
@@ -400,10 +502,6 @@ controller.on('slash_command', function(bot, message) {
 
                         for (var i = 0; i < user.join_case.length; i++) {
                             if (case_id == user.join_case[i].case_id) {
-                                if (input_ticket != user.join_case[i].ticket_num) {
-                                    sendVote('pwdWrong');
-                                    break;
-                                }
                                 if (!user.join_case[i].done) {
                                     sendVote();
                                 } else {
@@ -423,9 +521,6 @@ controller.on('slash_command', function(bot, message) {
         check_case(check_user); //First checkl poll case, then check user
         function sendVote(condition) {
             switch (condition) {
-                case 'pwdWrong':
-                    bot.replyPrivate(message, 'Sorry! 票卷號碼錯誤，請重新輸入');
-                    break;
                 case 'notAtAll':
                     bot.replyPrivate(message, 'Sorry! 你沒有參與任何投票案');
                     break;
@@ -442,10 +537,18 @@ controller.on('slash_command', function(bot, message) {
                     bot.replyPrivate(message, '此投票案不存在');
                     break;
                 default:
-                    createOption(case_id, message.user, function(data) {
-                        bot.replyPrivate(message, data);
-                    });
+                    if (case_type == 'poll') {
+                        createOption(case_id, message.user, function(data) {
+                            bot.replyPrivate(message, data);
+                        });
+                    } else if (case_type == 'input_number') {
+                        askNumber(bot, message, case_id, message.user, function(choice, unique_ticket) {
+                            updateUserCase(message.user, case_id, choice, unique_ticket);
+                        });
+                    }
                     break;
+
+
             }
 
         }
@@ -472,13 +575,43 @@ controller.on('slash_command', function(bot, message) {
                     data.attachments[0].title = '#' + case_id + '結果：' + polling_case[i].details.title;
                     data.attachments[0].text = polling_case[i].details.description;
 
-                    for (var j = 0; j < polling_case[i].details.option.length; j++) {
+                    // For type = poll
+                    if (polling_case[i].details.type == 'poll') {
+                        for (var j = 0; j < polling_case[i].details.option.length; j++) {
+                            data.attachments[0].fields.push({
+                                title: polling_case[i].details.option[j].text,
+                                value: polling_case[i].details.option[j].count + '票',
+                                short: true
+                            });
+                        }
+                    } else if (polling_case[i].details.type == 'input_number') {
+                        //For type = input_number
+                        var sum = 0;
+                        var length = polling_case[i].details.option.length;
+
+                        for (var j = 0; j < length; j++) {
+                            sum += polling_case[i].details.option[j];
+                        }
+
                         data.attachments[0].fields.push({
-                            title: polling_case[i].details.option[j].text,
-                            value: polling_case[i].details.option[j].count + '票',
+                            title: '平均',
+                            value: sum / length,
+                            short: true
+                        }, {
+                            title: '參與人數',
+                            value: length,
+                            short: true
+                        }, {
+                            title: '最大值',
+                            value: Math.max.apply(null, polling_case[i].details.option),
+                            short: true
+                        }, {
+                            title: '最小值',
+                            value: Math.min.apply(null, polling_case[i].details.option),
                             short: true
                         });
                     }
+
                     bot.replyPrivate(message, data);
                     break;
                 }
