@@ -3,7 +3,7 @@ var Botkit = require('botkit');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
-var port = process.env.port || "1337";
+var port = process.env.port || 5000;
 
 if (!process.env.clientId || !process.env.clientSecret || !port) {
     console.log('Error: Specify clientId clientSecret and port in environment');
