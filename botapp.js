@@ -1,9 +1,10 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
+var moment = require('moment');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
-var port = process.env.PORT || 5000;
+var port = process.env.PORT || 3000;
 
 if (!process.env.clientId || !process.env.clientSecret || !port) {
     console.log('Error: Specify clientId clientSecret and port in environment');
@@ -376,6 +377,8 @@ controller.on('slash_command', function(bot, message) {
             var detail = {
                 title: "",
                 description: "",
+                start_date: "",
+                due_date: "",
                 type: "",
                 people_goal: 0,
                 over_goal: false,
@@ -392,6 +395,18 @@ controller.on('slash_command', function(bot, message) {
             askDesc = function(response, convo) {
                 convo.ask('請輸入提案描述:', function(response, convo) {
                     convo.say('Got your description: ' + response.text);
+                    askDueDate(response, convo);
+                    convo.next();
+                });
+            }
+            askDueDate = function(response, convo) {
+                convo.ask('請輸入結束日期及時間： (格式：2016-08-31 10:30)', function(response, convo) {
+                    var res = convo.extractResponses();
+                    var get_date = res['請輸入結束日期及時間： (格式：2016-08-31 10:30)']; // The string of date
+                    convo.say('結束時間為:' + get_date);
+                    //detail.due_date = moment(get_date);
+                    detail.due_date = moment(get_date).unix();
+
                     askPeopleGoal(response, convo);
                     convo.next();
                 });
@@ -417,9 +432,9 @@ controller.on('slash_command', function(bot, message) {
                     var res = convo.extractResponses();
                     convo.say('OK! 你選擇了' + response.text);
 
-                    if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == 'A') {
+                    if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == ('A' || 'a')) {
                         detail.type = 'poll';
-                    } else if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == 'B') {
+                    } else if (res['A. 輸入固定選項，B. 成員自由輸入數字'] == ('B' || 'b')) {
                         detail.type = 'input_number';
                     }
                     askOpinion(response, convo);
@@ -443,6 +458,7 @@ controller.on('slash_command', function(bot, message) {
 
                         detail.title = res['請輸入提案標題:'];
                         detail.description = res['請輸入提案描述:'];
+                        detail.start_date = moment().format('X');
 
                         if (detail.type == 'poll') {
                             choice = res['請輸入投票選項，每個選項請用空格隔開：'].split(/\ /);
@@ -482,6 +498,12 @@ controller.on('slash_command', function(bot, message) {
 
                         if (!team.polling_case[i].details.over_goal) {
                             sendVote('notOpen');
+                            quali_case = false;
+                            break;
+                        }
+
+                        if( moment().format('X') > team.polling_case[i].details.due_date){
+                            sendVote('overDue');
                             quali_case = false;
                             break;
                         }
@@ -535,6 +557,9 @@ controller.on('slash_command', function(bot, message) {
                     break;
                 case 'caseNotExist':
                     bot.replyPrivate(message, '此投票案不存在');
+                    break;
+                case 'overDue':
+                    bot.replyPrivate(message, '此投票案已經過期。使用 `/result ' + case_id + '`指令查看結果');
                     break;
                 default:
                     if (case_type == 'poll') {
