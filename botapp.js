@@ -44,6 +44,26 @@ function trackBot(bot) {
     _bots[bot.config.token] = bot;
 }
 
+function get_list(bot, callback) {
+    bot.api.users.list({ token: bot.config.token }, function(err, res) {
+
+        var users_list = [];
+        if (err) {
+            console.log(err);
+        } else {
+
+            for (var i = 0; i < res.members.length; i++) {
+                var userId = res.members[i].id;
+                if (!(res.members[i].is_bot) && (userId != 'U1TN782GJ') && (userId != 'USLACKBOT')) {
+                    users_list.push(userId);
+                }
+            }
+        }
+        //callback && callback();
+        callback(users_list);
+    });
+}
+
 // Any members in group can propose the polling case
 function proposeCase(bot, case_detail) {
     //console.log('Function proposeCase: ' + JSON.stringify(case_detail));
@@ -52,7 +72,7 @@ function proposeCase(bot, case_detail) {
     controller.storage.teams.get('T1PG5SWSC', function(err, team) {
         /* Create a polling_case list or add new object to list directly */
         if (!team.hasOwnProperty('polling_case'))
-            team['polling_case'] = [{}];
+            team['polling_case'] = [];
 
         team.polling_case.push({
             case_id: (team.polling_case.length) + 1,
@@ -64,28 +84,7 @@ function proposeCase(bot, case_detail) {
 
         controller.storage.teams.save(team);
 
-        // Get users_list
-        var users_list = [];
-
-        function get_list(callback) {
-            bot.api.users.list({ token: bot.config.token }, function(err, res) {
-
-                if (err) {
-                    console.log(err);
-                } else {
-
-                    for (var i = 0; i < res.members.length; i++) {
-                        var userId = res.members[i].id;
-                        if (!(res.members[i].is_bot) && (userId != 'U1TN782GJ') && (userId != 'USLACKBOT')) {
-                            users_list.push(userId);
-                        }
-                    }
-                }
-                callback && callback();
-            });
-        }
-
-        var broadcast_im = function broadcast() {
+        var broadcast_im = function broadcast(users_list) {
             for (var i = 0; i < users_list.length; i++) {
                 bot.startPrivateConversation({ user: users_list[i] }, function(err, convo) {
                     if (err) {
@@ -118,7 +117,10 @@ function proposeCase(bot, case_detail) {
                 });
             }
         }
-        get_list(broadcast_im);
+
+        get_list(bot, function(users_list) {
+            broadcast_im(users_list);
+        });
     });
 }
 
@@ -154,8 +156,6 @@ function createOption(case_id, message_user, callback) {
 
 // For type 'input_number'
 function askNumber(bot, message, case_id, message_user, callback) {
-
-
 
     controller.storage.teams.get('T1PG5SWSC', function(err, team) {
         var polling_case;
@@ -317,7 +317,9 @@ controller.on('interactive_message_callback', function(bot, message) {
                         unique_ticket = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
                     } while (polling_case[i].tickets.indexOf(unique_ticket) != -1); // The ticket has existed.
 
-                    polling_case[i].tickets.push(unique_ticket);
+                    polling_case[i].tickets.push(unique_ticket); // 已發出去的票卷號碼
+                    polling_case[i].details.option[option_order - 1].tickets.push(unique_ticket); // 紀錄票卷放入哪個選項當中
+
                     updateUserCase(user_id, case_id, choice, unique_ticket);
                     bot.replyInteractive(message, ':white_check_mark: Thank you! You have chosen ' + choice +
                         '\n票卷號碼為：' + unique_ticket);
@@ -405,7 +407,7 @@ controller.on('slash_command', function(bot, message) {
                     var get_date = res['請輸入結束日期及時間： (格式：2016-08-31 10:30)']; // The string of date
                     convo.say('結束時間為:' + get_date);
                     //detail.due_date = moment(get_date);
-                    detail.due_date = moment(get_date).unix();
+                    detail.due_date = moment(get_date).unix() + 28800;
 
                     askPeopleGoal(response, convo);
                     convo.next();
@@ -458,12 +460,12 @@ controller.on('slash_command', function(bot, message) {
 
                         detail.title = res['請輸入提案標題:'];
                         detail.description = res['請輸入提案描述:'];
-                        detail.start_date = moment().format('X');
+                        detail.start_date = parseInt(moment().format('X')) + 28800; // GMT + 8 time zone
 
                         if (detail.type == 'poll') {
                             choice = res['請輸入投票選項，每個選項請用空格隔開：'].split(/\ /);
                             for (var i = 0; i < choice.length; i++) {
-                                detail.option.push({ text: choice[i], count: 0 });
+                                detail.option.push({ text: choice[i], count: 0, tickets: [] });
                             }
                         }
                         proposeCase(bot, detail);
@@ -502,7 +504,7 @@ controller.on('slash_command', function(bot, message) {
                             break;
                         }
 
-                        if( moment().format('X') > team.polling_case[i].details.due_date){
+                        if (moment().format('X') + 28800 > team.polling_case[i].details.due_date) {
                             sendVote('overDue');
                             quali_case = false;
                             break;
@@ -605,7 +607,8 @@ controller.on('slash_command', function(bot, message) {
                         for (var j = 0; j < polling_case[i].details.option.length; j++) {
                             data.attachments[0].fields.push({
                                 title: polling_case[i].details.option[j].text,
-                                value: polling_case[i].details.option[j].count + '票',
+                                value: polling_case[i].details.option[j].count + '票\n' + '已投入票卷: ' +
+                                    polling_case[i].details.option[j].tickets,
                                 short: true
                             });
                         }
@@ -673,6 +676,37 @@ controller.on('slash_command', function(bot, message) {
     }
 });
 
+function polling(bot) {
+    var current_time = parseInt(moment().format('X')) + 28800;
+    console.log("current time = " + current_time);
+    controller.storage.teams.get('T1PG5SWSC', function(err, team) {
+
+        if (team.hasOwnProperty('polling_case')) {
+            var polling_case = team.polling_case;
+            for (var i = 0; i < polling_case.length; i++) {
+                if ((polling_case[i].details.due_date - current_time) >= 3600 && (polling_case[i].details.due_date - current_time) < 3660) {
+
+                    var broadcast_im = function broadcast(users_list) {
+                        for (var i = 0; i < users_list.length; i++) {
+                            bot.startPrivateConversation({ user: users_list[i] }, function(err, convo) {
+                                if (err) {
+                                    console.log(err);
+                                } else {
+                                    convo.say('編號#' + polling_case[i].case_id + '將在一個小時後截止!');
+                                }
+                            });
+                        }
+                    }
+
+                    get_list(bot, function(users_list) {
+                        broadcast_im(users_list);
+                    });
+
+                }
+            }
+        }
+    });
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 controller.storage.teams.all(function(err, teams) {
@@ -725,6 +759,7 @@ controller.on('create_bot', function(bot, config) {
 // Handle events related to the websocket connection to Slack
 controller.on('rtm_open', function(bot) {
     console.log('** The RTM api just connected!');
+    setInterval(polling, 60000, bot);
 });
 
 controller.on('rtm_close', function(bot) {
