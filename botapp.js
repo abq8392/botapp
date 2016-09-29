@@ -1,6 +1,8 @@
 /* Uses the slack button feature to offer a real time bot to multiple teams */
 var Botkit = require('botkit');
 var moment = require('moment');
+var plotly = require('plotly')(process.env.username, process.env.plotlyApi);
+var fs = require('fs');
 
 var mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/botapp';
 var mongoStorage = require('botkit-storage-mongo')({ mongoUri: mongoUri });
@@ -407,7 +409,7 @@ controller.on('slash_command', function(bot, message) {
                     var get_date = res['請輸入結束日期及時間： (格式：2016-08-31 10:30)']; // The string of date
                     convo.say('結束時間為:' + get_date);
                     //detail.due_date = moment(get_date);
-                    detail.due_date = moment(get_date).unix() + 28800;
+                    detail.due_date = moment(get_date).unix();
 
                     askPeopleGoal(response, convo);
                     convo.next();
@@ -503,12 +505,12 @@ controller.on('slash_command', function(bot, message) {
                             quali_case = false;
                             break;
                         }
-
+                        /*
                         if (moment().format('X') + 28800 > team.polling_case[i].details.due_date) {
                             sendVote('overDue');
                             quali_case = false;
                             break;
-                        }
+                        }*/
 
                     }
                 }
@@ -591,6 +593,11 @@ controller.on('slash_command', function(bot, message) {
                 text: '',
                 fields: [],
                 color: '#F35A00'
+            }, {
+                fallback: 'Data Visualiztion of #' + case_id,
+                title: '',
+                text: '',
+                color: '#F35A00'
             }]
         }
 
@@ -601,21 +608,35 @@ controller.on('slash_command', function(bot, message) {
 
                     data.attachments[0].title = '#' + case_id + '結果：' + polling_case[i].details.title;
                     data.attachments[0].text = polling_case[i].details.description;
+                    data.attachments[1].title = '#' + case_id + ' 圖表';
 
                     // For type = poll
                     if (polling_case[i].details.type == 'poll') {
+
+                        var visual_data = [{ x: [], y: [], type: 'bar' }];
+                        var layout = { fileopt: 'overwrite', filename: moment().format('X') };
                         for (var j = 0; j < polling_case[i].details.option.length; j++) {
+                            // For text display
                             data.attachments[0].fields.push({
                                 title: polling_case[i].details.option[j].text,
                                 value: polling_case[i].details.option[j].count + '票\n' + '已投入票卷: ' +
                                     polling_case[i].details.option[j].tickets,
                                 short: true
                             });
+
+                            visual_data[0].x.push(polling_case[i].details.option[j].text);
+                            visual_data[0].y.push(polling_case[i].details.option[j].count);
                         }
+
+
+
                     } else if (polling_case[i].details.type == 'input_number') {
                         //For type = input_number
                         var sum = 0;
                         var length = polling_case[i].details.option.length;
+
+                        var visual_data = [{ x: polling_case[i].details.option, type: 'histogram' }];
+                        var layout = { fileopt: 'overwrite', filename: moment().format('X') };
 
                         for (var j = 0; j < length; j++) {
                             sum += polling_case[i].details.option[j];
@@ -638,9 +659,12 @@ controller.on('slash_command', function(bot, message) {
                             value: Math.min.apply(null, polling_case[i].details.option),
                             short: true
                         });
-                    }
 
-                    bot.replyPrivate(message, data);
+                    }
+                    plot_on_result(visual_data, layout, function(url) {
+                        data.attachments[1].text = 'Click here to see! ' + url;
+                        bot.replyPrivate(message, data);
+                    });
                     break;
                 }
             }
@@ -676,6 +700,7 @@ controller.on('slash_command', function(bot, message) {
     }
 });
 
+/* Polling to see whether there is a case almost due */
 function polling(bot) {
     var current_time = parseInt(moment().format('X')) + 28800;
     console.log("current time = " + current_time);
@@ -692,7 +717,7 @@ function polling(bot) {
                                 if (err) {
                                     console.log(err);
                                 } else {
-                                    convo.say('編號#' + polling_case[i].case_id + '將在一個小時後截止!');
+                                    convo.say(':bell:編號#' + polling_case[i].case_id + '將在一個小時後截止!');
                                 }
                             });
                         }
@@ -706,6 +731,37 @@ function polling(bot) {
             }
         }
     });
+}
+
+function plot_on_result(visual_data, layout, callback) {
+
+    plotly.plot(visual_data, layout, function(err, msg) {
+        if (err) return console.log(err);
+        callback(msg.url);
+
+        /*
+        var id = msg.url.split(/\//);
+        plotly.getFigure('anon.poll.bot', id[id.length - 1], function(err, figure) {
+            if (err) return console.log(err);
+            //return console.log(figure);
+
+            var img_opts = {
+                format: 'png',
+                width: 1000,
+                height: 500
+            };
+
+            plotly.getImage(figure, img_opts, function(err, img_stream) {
+                if (err) return console.log(err);
+
+                var img_name = id[id.length - 1] + '.png'
+                var fileStream = fs.createWriteStream(img_name);
+                img_stream.pipe(fileStream);
+            });
+        });*/
+    });
+
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
