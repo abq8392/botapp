@@ -505,12 +505,12 @@ controller.on('slash_command', function(bot, message) {
                             quali_case = false;
                             break;
                         }
-                        /*
+                        
                         if (moment().format('X') + 28800 > team.polling_case[i].details.due_date) {
                             sendVote('overDue');
                             quali_case = false;
                             break;
-                        }*/
+                        }
 
                     }
                 }
