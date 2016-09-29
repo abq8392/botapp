@@ -709,7 +709,7 @@ function polling(bot) {
         if (team.hasOwnProperty('polling_case')) {
             var polling_case = team.polling_case;
             for (var i = 0; i < polling_case.length; i++) {
-                if (polling_case[i].details.hasOwnProperty(due_date)) {
+                if (polling_case[i].details.hasOwnProperty('due_date')) {
                     if ((polling_case[i].details.due_date - current_time) >= 3600 && (polling_case[i].details.due_date - current_time) < 3660) {
 
                         var broadcast_im = function broadcast(users_list) {
