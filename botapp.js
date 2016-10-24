@@ -82,7 +82,7 @@ controller.on('slash_command', function(bot, message) {
     if (message.command == '/propose') {
 
         userCmd.propose(controller, bot, message);
-        
+
     } else if (message.command == '/vote') {
 
         var case_id = user_input[0];
