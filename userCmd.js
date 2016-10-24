@@ -274,6 +274,7 @@ module.exports = {
 
 
                     } else if (polling_case[i].details.type == 'input_number') {
+
                         //For type = input_number
                         var sum = 0;
                         var length = polling_case[i].details.option.length;
@@ -281,10 +282,18 @@ module.exports = {
                         var visual_data = [{ x: polling_case[i].details.option, type: 'histogram' }];
                         var layout = { fileopt: 'overwrite', filename: moment().format('X') };
 
+                        data.attachments.push({
+                            title: '詳細列表: 輸入數字 → 票卷號碼',
+                            text: '',
+                            color: '#F35A00'
+                        });
+
                         for (var j = 0; j < length; j++) {
                             sum += polling_case[i].details.option[j];
+                            data.attachments[2].text += polling_case[i].details.option[j] + '→' + polling_case[i].tickets[j] + '\n';
                         }
 
+                        console.log("option list: " + polling_case[i].details.option);
                         data.attachments[0].fields.push({
                             title: '平均',
                             value: sum / length,
@@ -304,6 +313,7 @@ module.exports = {
                         });
 
                     }
+
                     plot_on_result(plotly, visual_data, layout, function(url) {
                         data.attachments[1].text = 'Click here to see! ' + url;
                         bot.replyPrivate(message, data);
@@ -316,7 +326,7 @@ module.exports = {
 
     // Command: '/unvote'; Display the case which user has joined, but hasn't vote yet.
     unvote: function(controller, bot, message, data) {
-    	controller.storage.users.get(message.user, function(err, user) {
+        controller.storage.users.get(message.user, function(err, user) {
             var unvote_case = [];
 
             for (var i in user.join_case) {
@@ -332,7 +342,7 @@ module.exports = {
 
     // Command: '/votehelp'
     help: function(bot, message) {
-    	var helptext = require('./helptext');
+        var helptext = require('./helptext');
         bot.replyPrivate(message, helptext);
     }
 }
